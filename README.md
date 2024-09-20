@@ -1,1 +1,1 @@
-# kafka_flink_example
+# kafka-examples

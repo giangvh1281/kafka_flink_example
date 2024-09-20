@@ -1,0 +1,24 @@
+# Dockerfile for Producer Service
+FROM python:3.9
+
+WORKDIR /app
+
+# Install netcat-openbsd for wait-for-it script
+RUN apt-get update && apt-get install -y netcat-openbsd
+
+# Copy producer script, requirements, and wait-for-it script
+COPY producer/producer.py .
+COPY producer/requirements.txt .
+COPY wait-for-it.sh .
+
+# Copy templates
+COPY producer/templates /app/templates
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Make wait-for-it.sh executable
+RUN chmod +x wait-for-it.sh
+
+# Start a shell or long-running process
+CMD ["tail", "-f", "/dev/null"]

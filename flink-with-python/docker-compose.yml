@@ -1,0 +1,93 @@
+version: '3.7'
+services:
+  # Flink JobManager
+  jobmanager:
+    image: flink:latest
+    networks:
+      - flink-net
+    ports:
+      - 8081:8081
+    environment:
+      FLINK_PROPERTIES: "jobmanager.rpc.address: jobmanager"
+    command: jobmanager
+  
+  # Flink TaskManager
+  taskmanager:
+    image: flink:latest
+    networks:
+      - flink-net
+    environment:
+      FLINK_PROPERTIES: "jobmanager.rpc.address: jobmanager"
+    command: taskmanager
+
+  zookeeper:
+    image: wurstmeister/zookeeper
+    networks:
+      - flink-net
+
+  kafka:
+    image: wurstmeister/kafka
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ADVERTISED_PORT: 9092
+      KAFKA_CREATE_TOPICS: "input-topic:1:1,template-topic:1:1"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    networks:
+      - flink-net
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "kafka-cluster"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:9092"
+      KAFKA_CLUSTERS_0_ZOOKEEPER: "zookeeper:2181"
+    networks:
+      - flink-net
+
+  # Producer App (sends input data and template to Kafka)
+  producer_app:
+    build:
+      context: .
+      dockerfile: Dockerfile  # Using the single Dockerfile in the root directory
+    environment:
+      KAFKA_BROKER: kafka:9092
+    networks:
+      - flink-net
+    volumes:
+      - ./producer:/taskscripts  # Mount the producer directory to /taskscripts
+    entrypoint:
+      - tail
+    command:
+      - -f
+      - /dev/null
+
+  # Flink Consumer App (maps data to template and generates PDF)
+  pdf_printer_app:
+    build:
+      context: .
+      dockerfile: Dockerfile  # Using the same Dockerfile
+    environment:
+      KAFKA_BROKER: kafka:9092
+      PDF_OUTPUT_DIR: /pdf_output
+    depends_on:
+      - kafka
+      - jobmanager
+      - taskmanager
+    volumes:
+      - ./flink:/taskscripts  # Mount the flink directory to /taskscripts
+      - ./pdf_output:/pdf_output  # Mount the output directory for PDFs
+    networks:
+      - flink-net
+    entrypoint:
+      - tail
+    command:
+      - -f
+      - /dev/null
+
+networks:
+  flink-net:
+    external: false
+    name: flink-net
